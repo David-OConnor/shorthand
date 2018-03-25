@@ -24,6 +24,14 @@ pub fn read_file(filename: &str) -> Result<String, io::Error> {
     }
 }
 
+fn replace_all(re: Regex, words: &str, replacement: &str) -> Option<String> {
+    // Parse the Cow here; we use it multiple places.
+    if let Cow::Owned(s) = re.replace_all(words, replacement) {
+        return Some(s.to_string());
+    }
+    return None
+}
+
 fn pattern_replacement(
     contents: String,
     replacements: HashMap<&str, &str>,
@@ -41,8 +49,9 @@ fn pattern_replacement(
 
         let replacement: &str = &("${head}".to_string() + repl + "$tail");
 
-        if let Cow::Owned(s) = re.replace_all(&result, replacement) {
-            result = s.to_string();
+        match replace_all(re, &result, replacement) {
+            None => (),
+            Some(s) => result = s,
         }
     }
     result
@@ -51,16 +60,32 @@ fn pattern_replacement(
 pub fn word_replacements(contents: String) -> String {
     // Replace a few short words.
     let mut replacements = HashMap::new();
+
+    // The most common English words here, in order.
+    replacements.insert("the", "T");
+    replacements.insert("be", "B");
+    replacements.insert("to", "O");
+    replacements.insert("of", "F");
     replacements.insert("and", "A");
+    replacements.insert("in", "n");  // Could be handled with i replacement
     replacements.insert("that", "TT");
+    replacements.insert("have", "");
+    replacements.insert("it", "t");
+
+    replacements.insert("because", "BC");
+    
     replacements.insert("with", "W");
     replacements.insert("from", "FM");
     replacements.insert("when", "WN");
     replacements.insert("this", "TS");
+    
+    replacements.insert("are", "R");
+    replacements.insert("you", "U");
+    
 
     // The following may be more elegantly handled through the i-replacement logic
-    replacements.insert("in", "n");
-    replacements.insert("it", "t");
+    
+    
     replacements.insert("is", "s");
     replacements.insert("if", "f");
 
@@ -89,8 +114,9 @@ pub fn trailing_ed(contents: String) -> String {
 
         let replacement: &str = &(letter.to_uppercase().to_string() + "$tail");
 
-        if let Cow::Owned(s) = re.replace_all(&result, replacement) {
-            result = s.to_string();
+        match replace_all(re, &result, replacement) {
+            None => (),
+            Some(s) => result = s,
         }
     }
     cleanup_double_s(result)
@@ -107,15 +133,16 @@ fn cleanup_double_s(contents: String) -> String {
 
     let replacement: &str = &("ess".to_string() + "$tail");
 
-    if let Cow::Owned(s) = re.replace_all(&result, replacement) {
-        result = s.to_string();
+    match replace_all(re, &result, replacement) {
+        None => (),
+        Some(s) => result = s,
     }
     
     result
 }
 
 
-pub fn parse(filename: &str) -> String {
+pub fn run(filename: &str) -> String {
     let contents = read_file(filename);
     
     let mut contents = match contents {
@@ -143,7 +170,7 @@ mod tests {
         // test words.
         let test_str = String::from(
             "John is better at running while wearing her sweater.
-It's complex, yet sutble!",
+It's complex, yet subtle!",
         );
 
         let expected = String::from(
@@ -215,13 +242,13 @@ normal W all. Only f.",
         let test_str = String::from(
             "Testing is a fun thing to do. So is swimming; playing
 basketball. Fencing and formal functions. Croquet with loose rubber rods, in 
-place of complexs more substantial. Label this?",
+place of complexs more substantial. Label this; who are you?",
         );
 
         let expected = String::from(
             "TestG s a fun thG to do. So s swimmG; playG
 basketball. FencG A formal funcNs. CroquT W loose rubbR rods, n 
-place of complXs more substantial. LabL TS?",
+place of complXs more substantial. LabL TS; who R U?",
         );
 
         let mut contents = trailing_ed(test_str);
